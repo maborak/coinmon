@@ -7,6 +7,23 @@
 
 > 💰 Cryptocurrency price ticker CLI.
 
+
+## API KEY support: 
+
+Get a new API key here: https://pro.coinmarketcap.com/signup
+
+Export the API key: 
+```
+export COINMARKETCAP_APIKEY='THE-API-KEY'
+```
+
+Use API KEY on the fly:
+
+```
+coinmon -k 'THE-API-KEY'
+```
+-----
+
 Check cryptocurrencies' prices, changes on your console.
 Best CLI tool for those who are both **Crypto investors** and **Engineers**.
 
