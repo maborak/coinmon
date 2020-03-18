@@ -24,6 +24,7 @@ program
   .option('-p, --portfolio [portfolioPath]', 'Retrieve coins specified in $HOME/.coinmon/portfolio.json file')
   .option('-s, --specific [index]', 'Display specific columns (can be a comma seperated list)', list, [])
   .option('-r, --rank [index]', 'Sort specific column', validation.validateNumber, 0)
+  .option('-k, --apikey [API-KEY]', 'API KEY from: https://pro.coinmarketcap.com/signup', process.env.COINMARKETCAP_APIKEY || 'none')
   .parse(process.argv)
 
 console.log('\n')
@@ -36,7 +37,15 @@ const portfolio = program.portfolio
 const top = (find.length > 0 || portfolio) ? 1500 : program.top
 const column = program.specific
 const rank = program.rank
+const APIKEY = program.apikey
 
+if(APIKEY == 'none')
+{
+    console.error('Error: API KEY NOT FOUND'.red)
+    console.error("Generate a Key: "+ "https://pro.coinmarketcap.com/signup".green)
+    console.error('API-KEY: ' + APIKEY.green)
+    return;
+}
 // handle table
 const defaultHeader = ['Rank', 'Coin', `Price ${convert}`, 'Change 1H', 'Change 24H', 'Change 7D', `Market Cap ${marketcapConvert}`].map(title => title.yellow)
 if (portfolio) {
@@ -44,13 +53,13 @@ if (portfolio) {
   defaultHeader.push('Estimated Value'.yellow)
 }
 const defaultColumns = defaultHeader.map((item, index) => index)
-const columns = column.length > 0 
-? column.map(index => +index)
-  .filter((index) => {
-  return !isNaN(index)
-    && index < defaultHeader.length
-  }) 
-: defaultColumns
+const columns = column.length > 0
+  ? column.map(index => +index)
+    .filter((index) => {
+      return !isNaN(index)
+        && index < defaultHeader.length
+    })
+  : defaultColumns
 const sortedColumns = columns.sort()
 const header = sortedColumns.map(index => defaultHeader[index])
 const table = new Table({
@@ -98,7 +107,7 @@ if (portfolio) {
 const spinner = ora('Loading data').start()
 
 // call coinmarketcap API
-const sourceUrl = `https://api.coinmarketcap.com/v1/ticker/?limit=${top}&convert=${convert}`
+const sourceUrl = `https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest?limit=${top}&convert=${convert}`
 const priceKey = `price_${convert}`.toLowerCase()
 const marketCapKey = `market_cap_${marketcapConvert}`.toLowerCase()
 const volume24hKey = `24h_volume_${marketcapConvert}`.toLowerCase()
@@ -115,10 +124,14 @@ if (portfolio) {
   keysMap[defaultHeader.length - 1] = 'portfolio_balance'
   keysMap[defaultHeader.length] = 'portfolio_estimated_value'
 }
-axios.get(sourceUrl)
+axios.get(sourceUrl, {
+  params: {}, headers: {
+    'X-CMC_PRO_API_KEY': APIKEY
+  }
+})
   .then(function (response) {
     spinner.stop()
-    response.data
+    response.data.data
       .filter(record => {
         if (portfolio) {
           return Object.keys(portfolioCoins).some(keyword => record.symbol.toLowerCase() === keyword.toLowerCase())
@@ -128,21 +141,22 @@ axios.get(sourceUrl)
         return true
       })
       .map(record => {
+        //console.log(record)
         const editedRecord = {
           'name': record.name,
           'symbol': record.symbol,
-          'rank': record.rank && +record.rank,
-          'available_supply': record.available_supply && +record.available_supply,
+          'rank': record.cmc_rank && +record.cmc_rank,
+          'available_supply': record.circulating_supply && +record.circulating_supply,
           'total_supply': record.total_supply && +record.total_supply,
           'max_supply': record.max_supply && +record.max_supply,
-          'percent_change_1h': record.percent_change_1h && +record.percent_change_1h,
-          'percent_change_24h': record.percent_change_24h && +record.percent_change_24h,
-          'percent_change_7d': record.percent_change_7d && +record.percent_change_7d,
-          'last_updated': record.last_updated
+          'percent_change_1h': record['quote'][convert].percent_change_1h && +record['quote'][convert].percent_change_1h,
+          'percent_change_24h': record['quote'][convert].percent_change_24h && +record['quote'][convert].percent_change_24h,
+          'percent_change_7d': record['quote'][convert].percent_change_7d && +record['quote'][convert].percent_change_7d,
+          'last_updated': record['quote'][convert].last_updated
         }
-        editedRecord[priceKey] = record[priceKey] && +record[priceKey]
-        editedRecord[volume24hKey] = record[volume24hKey] && +record[volume24hKey]
-        editedRecord[marketCapKey] = record[marketCapKey] && +record[marketCapKey]
+        editedRecord[priceKey] = record['quote'][convert]['price'] && +record['quote'][convert]['price']
+        editedRecord[volume24hKey] = record['quote'][convert]['volume_24h'] && +record['quote'][convert]['volume_24h']
+        editedRecord[marketCapKey] = record['quote'][convert]['market_cap'] && +record['quote'][convert]['market_cap']
         if (portfolio) {
           const portfolioGross = portfolioCoins[record.symbol.toLowerCase()] * parseFloat(record[priceKey])
           editedRecord['portfolio_balance'] = portfolioCoins[record.symbol.toLowerCase()]
@@ -153,7 +167,7 @@ axios.get(sourceUrl)
       .sort((recordA, recordB) => {
         const compareKey = keysMap[rank]
         if (rank === 0 || !compareKey) {
-          return -1
+          return recordA[compareKey] - recordB[compareKey]
         } else if (rank === 1) {
           return recordA[compareKey].localeCompare(recordB[compareKey])
         } else {
@@ -195,4 +209,7 @@ axios.get(sourceUrl)
   .catch(function (error) {
     spinner.stop()
     console.error('Coinmon is not working now. Please try again later.'.red)
+    console.error('Message: ' + error.response.statusText.red)
+    console.error('API-KEY: ' + APIKEY.green)
+
   })
