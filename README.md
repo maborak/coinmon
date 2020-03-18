@@ -14,13 +14,13 @@ Get a new API key here: https://pro.coinmarketcap.com/signup
 
 Export the API key: 
 ```
-export COINMARKETCAP_APIKEY='THE-API-KEY'
+$ export COINMARKETCAP_APIKEY='THE-API-KEY'
 ```
 
 Use API KEY on the fly:
 
 ```
-coinmon -k 'THE-API-KEY'
+$ coinmon -k 'THE-API-KEY'
 ```
 -----
 
